@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stellar Nook: The Collector's Grimoire</title>
+    <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@300;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --pink-soft: #ffdde1;
+            --purple-bg: #1a1a2e;
+            --gold: #fbc02d;
+            --glass: rgba(255, 255, 255, 0.08);
+        }
+
+        body {
+            margin: 0;
+            background: #0f0c29;
+            background: linear-gradient(to bottom, #24243e, #302b63, #0f0c29);
+            color: white;
+            font-family: 'Quicksand', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .game-wrapper {
+            display: flex;
+            gap: 20px;
+            align-items: flex-start;
+        }
+
+        /* Main Game Area */
+        .main-container {
+            background: var(--glass);
+            backdrop-filter: blur(15px);
+            border: 1px solid rgba(255,255,255,0.1);
+            padding: 25px;
+            border-radius: 40px;
+            text-align: center;
+            box-shadow: 0 25px 50px rgba(0,0,0,0.5);
+        }
+
+        canvas {
+            cursor: none;
+            background: rgba(0,0,0,0.2);
+            border-radius: 20px;
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.5);
+        }
+
+        /* Collection Sidebar */
+        .grimoire {
+            width: 200px;
+            background: var(--glass);
+            backdrop-filter: blur(10px);
+            border-radius: 30px;
+            padding: 20px;
+            height: 450px;
+            border: 1px solid rgba(255,255,255,0.1);
+            overflow-y: auto;
+        }
+
+        .grimoire h2 { font-size: 1.2rem; margin-top: 0; color: var(--pink-soft); }
+        .collection-item {
+            font-size: 0.85rem;
+            padding: 8px;
+            margin: 5px 0;
+            background: rgba(255,255,255,0.05);
+            border-radius: 10px;
+            text-align: left;
+        }
+
+        .header h1 {
+            margin: 0 0 10px 0;
+            font-size: 1.5rem;
+            letter-spacing: 3px;
+            color: var(--pink-soft);
+            text-shadow: 0 0 10px rgba(255,221,225,0.5);
+        }
+
+        .stats {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            font-size: 0.9rem;
+            color: var(--gold);
+        }
+
+        .controls { margin-top: 15px; }
+        
+        button {
+            background: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-weight: bold;
+            color: #302b63;
+            cursor: pointer;
+            transition: 0.3s;
+        }
+
+        button:hover { transform: scale(1.05); background: var(--pink-soft); }
+
+        .shake { animation: shake 0.4s; }
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-4px); }
+            75% { transform: translateX(4px); }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="game-wrapper">
+        <div class="main-container" id="board">
+            <div class="stats">
+                <span>✨ Stardust: <span id="dust-val">0</span></span>
+                <span>Unlocked: <span id="unlock-val">0/10</span></span>
+            </div>
+            <div class="header"><h1>STELLAR NOOK</h1></div>
+            
+            <canvas id="sky" width="600" height="400"></canvas>
+            
+            <div id="status" style="margin-top:15px; font-size:0.9rem; height:20px;">Draw the pattern...</div>
+            
+            <div class="controls">
+                <button onclick="resetGame()">Summon New Stars</button>
+            </div>
+        </div>
+
+        <div class="grimoire">
+            <h2>Grimoire</h2>
+            <div id="collection-list">
+                <div style="opacity:0.5; font-size:0.8rem;">No discoveries yet...</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('sky');
+        const ctx = canvas.getContext('2d');
+        const dustEl = document.getElementById('dust-val');
+        const unlockEl = document.getElementById('unlock-val');
+        const listEl = document.getElementById('collection-list');
+
+        let stars = [];
+        let particles = [];
+        let nextId = 1;
+        let isWin = false;
+        let stardust = parseInt(localStorage.getItem('stardust')) || 0;
+        let foundItems = JSON.parse(localStorage.getItem('foundItems')) || [];
+
+        const consts = [
+            { name: "Cosmic Fox", emoji: "🦊", points: 50 },
+            { name: "Star Whale", emoji: "🐋", points: 60 },
+            { name: "Dreamy Cat", emoji: "🐱", points: 40 },
+            { name: "Lunar Moth", emoji: "🦋", points: 55 },
+            { name: "Astro Owl", emoji: "🦉", points: 70 }
+        ];
+        let activeConst = consts[0];
+
+        function updateUI() {
+            dustEl.innerText = stardust;
+            unlockEl.innerText = `${foundItems.length}/10`;
+            listEl.innerHTML = foundItems.map(item => `
+                <div class="collection-item">${item.emoji} ${item.name}</div>
+            `).join('');
+            if(foundItems.length === 0) listEl.innerHTML = "No discoveries yet...";
+            localStorage.setItem('stardust', stardust);
+            localStorage.setItem('foundItems', JSON.stringify(foundItems));
+        }
+
+        function resetGame() {
+            stars = [];
+            nextId = 1;
+            isWin = false;
+            activeConst = consts[Math.floor(Math.random() * consts.length)];
+            document.getElementById('status').innerText = `Seeking: ${activeConst.name}`;
+            
+            for(let i=1; i<=7; i++) {
+                stars.push({
+                    id: i,
+                    x: 80 + Math.random() * 440,
+                    y: 80 + Math.random() * 240,
+                    found: false
+                });
+            }
+            updateUI();
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Particles
+            particles.forEach((p, i) => {
+                p.x += p.vx; p.y += p.vy; p.life -= 0.02;
+                ctx.fillStyle = `rgba(255,221,225,${p.life})`;
+                ctx.beginPath(); ctx.arc(p.x, p.y, p.s, 0, Math.PI*2); ctx.fill();
+                if(p.life <= 0) particles.splice(i, 1);
+            });
+
+            // Lines
+            ctx.beginPath();
+            ctx.strokeStyle = "rgba(255,255,255,0.2)";
+            ctx.setLineDash([5, 5]);
+            stars.forEach((s, i) => {
+                if(s.found && stars[i+1]?.found) {
+                    ctx.moveTo(s.x, s.y); ctx.lineTo(stars[i+1].x, stars[i+1].y);
+                }
+            });
+            ctx.stroke();
+
+            // Stars
+            stars.forEach(s => {
+                ctx.beginPath();
+                ctx.arc(s.x, s.y, s.found ? 6 : 4, 0, Math.PI*2);
+                ctx.fillStyle = s.found ? "#fbc02d" : (s.id === nextId ? "white" : "rgba(255,255,255,0.3)");
+                if(s.found) ctx.shadowBlur = 15, ctx.shadowColor = "#fbc02d";
+                ctx.fill();
+                ctx.shadowBlur = 0;
+                if(s.id === nextId || s.found) {
+                    ctx.fillStyle = "white"; ctx.font = "10px Arial";
+                    ctx.fillText(s.id, s.x+10, s.y-10);
+                }
+            });
+
+            if(isWin) {
+                ctx.font = "80px Arial"; ctx.textAlign = "center";
+                ctx.fillText(activeConst.emoji, canvas.width/2, canvas.height/2 + 20);
+            }
+
+            requestAnimationFrame(draw);
+        }
+
+        canvas.addEventListener('mousemove', (e) => {
+            const r = canvas.getBoundingClientRect();
+            const x = e.clientX - r.left, y = e.clientY - r.top;
+            for(let i=0; i<2; i++) particles.push({x, y, vx:Math.random()-0.5, vy:Math.random()-0.5, life:1, s:Math.random()*3});
+            
+            // Interaction check
+            let target = stars.find(s => s.id === nextId);
+            if(target && Math.hypot(x-target.x, y-target.y) < 20) {
+                target.found = true;
+                if(nextId === stars.length) {
+                    isWin = true;
+                    stardust += activeConst.points;
+                    if(!foundItems.some(f => f.name === activeConst.name)) foundItems.push(activeConst);
+                    updateUI();
+                } else nextId++;
+            }
+        });
+
+        resetGame(); draw();
+    </script>
+</body>
+</html>
